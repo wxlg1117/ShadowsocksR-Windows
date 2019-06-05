@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -12,17 +12,17 @@
     <ApplicationIcon>shadowsocks.ico</ApplicationIcon>
     <StartupObject>Shadowsocks.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>8</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;_DOTNET_4_0, PROTOCOL_STATISTICS</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;PROTOCOL_STATISTICS</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE;_DOTNET_4_0, PROTOCOL_STATISTICS</DefineConstants>
+    <DefineConstants>TRACE;PROTOCOL_STATISTICS</DefineConstants>
   </PropertyGroup>
   
   <PropertyGroup>
@@ -30,6 +30,10 @@
 	<DefineConstants Condition=" '$(SelfContained)' == 'true' ">$(DefineConstants);IsSelfContainedDotNetCore</DefineConstants>
 	<DefineConstants Condition=" '$(RuntimeIdentifier)' == 'win-x64' ">$(DefineConstants);Is64Bit</DefineConstants>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <None Remove="View\ResetPassword.xaml" />
+  </ItemGroup>
   
   <ItemGroup>
     <PackageReference Include="Costura.Fody" Version="4.0.0" Condition=" '$(SelfContained)' != 'true' " />
@@ -73,12 +77,6 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Update="View\QRCodeSplashForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Update="View\ResetPassword.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Update="View\ResetPassword.Designer.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Update="View\ServerLogForm.cs">
