@@ -17,6 +17,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using Point = System.Drawing.Point;
 
 namespace Shadowsocks.Util
 {
@@ -73,11 +76,13 @@ namespace Shadowsocks.Util
         {
             var buffer = new byte[1024];
             using var sb = new MemoryStream();
-            using var input = new GZipStream(new MemoryStream(buf), CompressionMode.Decompress, false);
-            int n;
-            while ((n = input.Read(buffer, 0, buffer.Length)) > 0)
+            using (var input = new GZipStream(new MemoryStream(buf), CompressionMode.Decompress, false))
             {
-                sb.Write(buffer, 0, n);
+                int n;
+                while ((n = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    sb.Write(buffer, 0, n);
+                }
             }
             return Encoding.UTF8.GetString(sb.ToArray());
         }
@@ -641,6 +646,38 @@ namespace Shadowsocks.Util
             return cfgData;
         }
 
+        public static void RegistrySetValue(RegistryKey registry, string name, object value)
+        {
+            try
+            {
+                registry.SetValue(name, value);
+            }
+            catch (Exception e)
+            {
+                Logging.LogUsefulException(e);
+            }
+        }
+
+        public static RegistryKey OpenUserRegKey(string name, bool writable)
+        {
+            var userKey = RegistryKey.OpenRemoteBaseKey(RegistryHive.CurrentUser, string.Empty,
+                    Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32
+            ).OpenSubKey(name, writable);
+            return userKey;
+        }
+
+        public static void BringToFront(this FrameworkElement element)
+        {
+            if (element?.Parent is Panel parent)
+            {
+                var maxZ = parent.Children.OfType<UIElement>()
+                        .Where(x => x != element)
+                        .Select(Panel.GetZIndex)
+                        .Max();
+                Panel.SetZIndex(element, maxZ + 1);
+            }
+        }
+
         public enum DeviceCap
         {
             DESKTOPVERTRES = 117,
@@ -649,14 +686,12 @@ namespace Shadowsocks.Util
 
         public static Point GetScreenPhysicalSize()
         {
-            using (var g = Graphics.FromHwnd(IntPtr.Zero))
-            {
-                var desktop = g.GetHdc();
-                var PhysicalScreenWidth = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPHORZRES);
-                var PhysicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPVERTRES);
+            using var g = Graphics.FromHwnd(IntPtr.Zero);
+            var desktop = g.GetHdc();
+            var PhysicalScreenWidth = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPHORZRES);
+            var PhysicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPVERTRES);
 
-                return new Point(PhysicalScreenWidth, PhysicalScreenHeight);
-            }
+            return new Point(PhysicalScreenWidth, PhysicalScreenHeight);
         }
 
         [DllImport("gdi32.dll")]

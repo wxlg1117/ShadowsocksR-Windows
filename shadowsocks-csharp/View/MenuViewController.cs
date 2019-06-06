@@ -37,12 +37,12 @@ namespace Shadowsocks.View
         // when config form is closed, it moves away from RAM
         // and it should just do anything related to the config form
 
-        private ShadowsocksController controller;
-        private UpdateChecker updateChecker;
-        private UpdateFreeNode updateFreeNodeChecker;
-        private UpdateSubscribeManager updateSubscribeManager;
+        private readonly ShadowsocksController controller;
+        private readonly UpdateChecker updateChecker;
+        private readonly UpdateFreeNode updateFreeNodeChecker;
+        private readonly UpdateSubscribeManager updateSubscribeManager;
 
-        private NotifyIcon _notifyIcon;
+        private readonly NotifyIcon _notifyIcon;
         private ContextMenu contextMenu1;
 
         private MenuItem noModifyItem;
@@ -70,8 +70,8 @@ namespace Shadowsocks.View
         private string _urlToOpen;
         private System.Timers.Timer timerDelayCheckUpdate;
 
-        private bool configfrom_open = false;
-        private List<EventParams> eventList = new List<EventParams>();
+        private bool configFrom_open;
+        private readonly List<EventParams> eventList = new List<EventParams>();
 
         public MenuViewController(ShadowsocksController controller)
         {
@@ -128,7 +128,7 @@ namespace Shadowsocks.View
             }
         }
 
-        void controller_Errored(object sender, ErrorEventArgs e)
+        private void controller_Errored(object sender, ErrorEventArgs e)
         {
             MessageBox.Show(e.GetException().ToString(), string.Format(I18N.GetString("Shadowsocks Error: {0}"), e.GetException().Message));
         }
@@ -301,7 +301,7 @@ namespace Shadowsocks.View
                     new MenuItem("-"),
                     CreateMenuItem("Update local PAC from Chn Only list", UpdatePACFromCNOnlyListItem_Click),
                     new MenuItem("-"),
-                    CreateMenuItem("Copy PAC URL", CopyPACURLItem_Click),
+                    CreateMenuItem("Copy PAC URL", CopyPacUrlItem_Click),
                     CreateMenuItem("Edit local PAC file...", EditPACFileItem_Click),
                     CreateMenuItem("Edit user rule for GFWList...", EditUserRuleFileForGFWListItem_Click),
                 }),
@@ -371,7 +371,7 @@ namespace Shadowsocks.View
             UpdateProxyRule(config);
         }
 
-        void controller_FileReadyToOpen(object sender, ShadowsocksController.PathEventArgs e)
+        private void controller_FileReadyToOpen(object sender, ShadowsocksController.PathEventArgs e)
         {
             //Process.Start(@"explorer.exe", $@"/select, {e.Path}");
             new Process
@@ -383,7 +383,7 @@ namespace Shadowsocks.View
             }.Start();
         }
 
-        void ShowBalloonTip(string title, string content, ToolTipIcon icon, int timeout)
+        private void ShowBalloonTip(string title, string content, ToolTipIcon icon, int timeout)
         {
             _notifyIcon.BalloonTipTitle = title;
             _notifyIcon.BalloonTipText = content;
@@ -391,13 +391,13 @@ namespace Shadowsocks.View
             _notifyIcon.ShowBalloonTip(timeout);
         }
 
-        void controller_UpdatePACFromGFWListError(object sender, ErrorEventArgs e)
+        private void controller_UpdatePACFromGFWListError(object sender, ErrorEventArgs e)
         {
             ShowBalloonTip(I18N.GetString(@"Failed to update PAC file"), e.GetException().Message, ToolTipIcon.Error, 5000);
             Logging.LogUsefulException(e.GetException());
         }
 
-        void controller_UpdatePACFromGFWListCompleted(object sender, GFWListUpdater.ResultEventArgs e)
+        private void controller_UpdatePACFromGFWListCompleted(object sender, GFWListUpdater.ResultEventArgs e)
         {
             var updater = (GFWListUpdater)sender;
             var result = e.Success ?
@@ -406,15 +406,15 @@ namespace Shadowsocks.View
             ShowBalloonTip(I18N.GetString(@"ShadowsocksR"), result, ToolTipIcon.Info, 1000);
         }
 
-        void controller_UpdatePACFromChnDomainsAndIPCompleted(object sender, ChnDomainsAndIPUpdater.ResultEventArgs e)
+        private void controller_UpdatePACFromChnDomainsAndIPCompleted(object sender, ChnDomainsAndIPUpdater.ResultEventArgs e)
         {
             var result = e.Success ? I18N.GetString(@"PAC updated") : I18N.GetString(@"No updates found.");
             ShowBalloonTip(I18N.GetString(@"ShadowsocksR"), result, ToolTipIcon.Info, 1000);
         }
 
-        void updateFreeNodeChecker_NewFreeNodeFound(object sender, EventArgs e)
+        private void updateFreeNodeChecker_NewFreeNodeFound(object sender, EventArgs e)
         {
-            if (configfrom_open)
+            if (configFrom_open)
             {
                 eventList.Add(new EventParams(sender, e));
                 return;
@@ -491,17 +491,17 @@ namespace Shadowsocks.View
                             // ignored
                         }
                     }
-                    var subscribeURL = updateSubscribeManager.URL;
+                    var subscribeURL = updateSubscribeManager.Url;
                     if (string.IsNullOrEmpty(curGroup))
                     {
                         curGroup = subscribeURL;
                     }
-                    for (var i = 0; i < config.serverSubscribes.Count; ++i)
+                    foreach (var serverSubscribe in config.serverSubscribes)
                     {
-                        if (subscribeURL == config.serverSubscribes[i].URL)
+                        if (subscribeURL == serverSubscribe.URL)
                         {
-                            lastGroup = config.serverSubscribes[i].Group;
-                            config.serverSubscribes[i].Group = curGroup;
+                            lastGroup = serverSubscribe.Group;
+                            serverSubscribe.Group = curGroup;
                             break;
                         }
                     }
@@ -586,7 +586,7 @@ namespace Shadowsocks.View
                                 if (!match)
                                 {
                                     var insert_index = config.configs.Count;
-                                    for (var index = config.configs.Count - 1; index >= 0; --index)
+                                    for (var index = 0; index < config.configs.Count; ++index)
                                     {
                                         if (config.configs[index].group == curGroup)
                                         {
@@ -605,7 +605,7 @@ namespace Shadowsocks.View
                         }
                         foreach (var pair in old_servers)
                         {
-                            for (var i = config.configs.Count - 1; i >= 0; --i)
+                            for (var i = 0; i < config.configs.Count; ++i)
                             {
                                 if (config.configs[i].id == pair.Key)
                                 {
@@ -620,7 +620,7 @@ namespace Shadowsocks.View
                     if (selected_server != null)
                     {
                         var match = false;
-                        for (var i = config.configs.Count - 1; i >= 0; --i)
+                        for (var i = 0; i < config.configs.Count; ++i)
                         {
                             if (config.configs[i].id == selected_server.id)
                             {
@@ -649,11 +649,11 @@ namespace Shadowsocks.View
                     }
                     if (count > 0)
                     {
-                        for (var i = 0; i < config.serverSubscribes.Count; ++i)
+                        foreach (var serverSubscribe in config.serverSubscribes)
                         {
-                            if (config.serverSubscribes[i].URL == updateFreeNodeChecker.subscribeTask.URL)
+                            if (serverSubscribe.URL == updateFreeNodeChecker.SubscribeTask.URL)
                             {
-                                config.serverSubscribes[i].LastUpdateTime = (ulong)Math.Floor(DateTime.Now.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds);
+                                serverSubscribe.LastUpdateTime = (ulong)Math.Floor(DateTime.Now.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds);
                             }
                         }
                     }
@@ -663,19 +663,24 @@ namespace Shadowsocks.View
 
             if (count > 0)
             {
-                if (updateFreeNodeChecker.noitify)
+                if (updateFreeNodeChecker.Notify)
+                {
                     ShowBalloonTip(I18N.GetString("Success"),
-                        string.Format(I18N.GetString("Update subscribe {0} success"), lastGroup), ToolTipIcon.Info, 10000);
+                            string.Format(I18N.GetString("Update subscribe {0} success"), lastGroup), ToolTipIcon.Info, 10000);
+                }
             }
             else
             {
                 if (lastGroup == null)
                 {
-                    lastGroup = updateFreeNodeChecker.subscribeTask.Group;
-                    //lastGroup = updateSubscribeManager.LastGroup;
+                    lastGroup = updateFreeNodeChecker.SubscribeTask.Group;
                 }
-                ShowBalloonTip(I18N.GetString("Error"),
-                    string.Format(I18N.GetString("Update subscribe {0} failure"), lastGroup), ToolTipIcon.Info, 10000);
+
+                if (updateFreeNodeChecker.Notify)
+                {
+                    ShowBalloonTip(I18N.GetString("Error"),
+                            string.Format(I18N.GetString("Update subscribe {0} failure"), lastGroup), ToolTipIcon.Info, 10000);
+                }
             }
             if (updateSubscribeManager.Next())
             {
@@ -683,7 +688,7 @@ namespace Shadowsocks.View
             }
         }
 
-        void updateChecker_NewVersionFound(object sender, EventArgs e)
+        private void updateChecker_NewVersionFound(object sender, EventArgs e)
         {
             if (updateChecker.Found)
             {
@@ -697,19 +702,19 @@ namespace Shadowsocks.View
             }
         }
 
-        void updateChecker_NewVersionNotFound(object sender, EventArgs e)
+        private void updateChecker_NewVersionNotFound(object sender, EventArgs e)
         {
             ShowBalloonTip($@"{I18N.GetString(@"ShadowsocksR")} {UpdateChecker.FullVersion}", I18N.GetString(@"No newer version was found"), ToolTipIcon.Info, 10000);
         }
 
-        void UpdateItem_Clicked(object sender, EventArgs e)
+        private void UpdateItem_Clicked(object sender, EventArgs e)
         {
-            Utils.OpenURL(updateChecker.LatestVersionURL);
+            Utils.OpenURL(updateChecker.LatestVersionUrl);
             UpdateItem.Visible = false;
             updateChecker.Found = false;
         }
 
-        void notifyIcon1_BalloonTipClicked(object sender, EventArgs e)
+        private void notifyIcon1_BalloonTipClicked(object sender, EventArgs e)
         {
             //Utils.OpenUR(updateChecker.LatestVersionURL);
         }
@@ -753,24 +758,22 @@ namespace Shadowsocks.View
 
             var configuration = controller.GetCurrentConfiguration();
             var group = new SortedDictionary<string, MenuItem>();
-            const string def_group = "!(no group)";
-            var select_group = "";
+            const string def_group = @"!(no group)";
+            var selectGroup = string.Empty;
             for (var i = 0; i < configuration.configs.Count; i++)
             {
-                string group_name;
                 var server = configuration.configs[i];
-                if (string.IsNullOrEmpty(server.group))
-                    group_name = def_group;
-                else
-                    group_name = server.group;
+                var group_name = string.IsNullOrEmpty(server.group) ? def_group : server.group;
 
-                var item = new MenuItem(server.FriendlyName());
-                item.Tag = i;
+                var item = new MenuItem(server.FriendlyName())
+                {
+                    Tag = i
+                };
                 item.Click += AServerItem_Click;
                 if (configuration.index == i)
                 {
                     item.Checked = true;
-                    select_group = group_name;
+                    selectGroup = group_name;
                 }
 
                 if (group.ContainsKey(group_name))
@@ -790,7 +793,7 @@ namespace Shadowsocks.View
                     {
                         pair.Value.Text = @"(empty group)";
                     }
-                    if (pair.Key == select_group)
+                    if (pair.Key == selectGroup)
                     {
                         pair.Value.Text = @"● " + pair.Value.Text;
                     }
@@ -817,7 +820,7 @@ namespace Shadowsocks.View
             }
             else
             {
-                configfrom_open = true;
+                configFrom_open = true;
                 configForm = new ConfigForm(controller, updateChecker, addNode ? -1 : -2);
                 configForm.Show();
                 configForm.Activate();
@@ -834,7 +837,7 @@ namespace Shadowsocks.View
             }
             else
             {
-                configfrom_open = true;
+                configFrom_open = true;
                 configForm = new ConfigForm(controller, updateChecker, index);
                 configForm.Show();
                 configForm.Activate();
@@ -943,10 +946,10 @@ namespace Shadowsocks.View
             }
         }
 
-        void configForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void configForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             configForm = null;
-            configfrom_open = false;
+            configFrom_open = false;
             Utils.ReleaseMemory();
             if (eventList.Count > 0)
             {
@@ -958,31 +961,31 @@ namespace Shadowsocks.View
             }
         }
 
-        void settingsForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void settingsForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             settingsForm = null;
             Utils.ReleaseMemory();
         }
 
-        void serverLogForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void serverLogForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             serverLogForm = null;
             Utils.ReleaseMemory();
         }
 
-        void portMapForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void portMapForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             portMapForm = null;
             Utils.ReleaseMemory();
         }
 
-        void globalLogForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void globalLogForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             logForm = null;
             Utils.ReleaseMemory();
         }
 
-        void subScribeForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void subScribeForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             subScribeForm = null;
         }
@@ -1001,22 +1004,22 @@ namespace Shadowsocks.View
 
         private void Import_Click(object sender, EventArgs e)
         {
-            using (var dlg = new OpenFileDialog())
+            using var dlg = new OpenFileDialog
             {
-                dlg.InitialDirectory = Directory.GetCurrentDirectory();
-                if (dlg.ShowDialog() == DialogResult.OK)
+                InitialDirectory = Directory.GetCurrentDirectory()
+            };
+            if (dlg.ShowDialog() == DialogResult.OK)
+            {
+                var name = dlg.FileName;
+                var cfg = Configuration.LoadFile(name);
+                if (cfg.configs.Count == 1 && cfg.configs[0].server == Configuration.GetDefaultServer().server)
                 {
-                    var name = dlg.FileName;
-                    var cfg = Configuration.LoadFile(name);
-                    if (cfg.configs.Count == 1 && cfg.configs[0].server == Configuration.GetDefaultServer().server)
-                    {
-                        MessageBox.Show(@"Load config file failed", UpdateChecker.Name);
-                    }
-                    else
-                    {
-                        controller.MergeConfiguration(cfg);
-                        LoadCurrentConfiguration();
-                    }
+                    MessageBox.Show(@"Load config file failed", UpdateChecker.Name);
+                }
+                else
+                {
+                    controller.MergeConfiguration(cfg);
+                    LoadCurrentConfiguration();
                 }
             }
         }
@@ -1161,18 +1164,9 @@ namespace Shadowsocks.View
             controller.ToggleSameHostForSameTargetRandom(sameHostForSameTargetItem.Checked);
         }
 
-        private void CopyPACURLItem_Click(object sender, EventArgs e)
+        private void CopyPacUrlItem_Click(object sender, EventArgs e)
         {
-            try
-            {
-                var config = controller.GetCurrentConfiguration();
-                var pacUrl = $@"http://127.0.0.1:{config.localPort}/pac?auth={config.localAuthPassword}&t={Utils.GetTimestamp(DateTime.Now)}";
-                Clipboard.SetDataObject(pacUrl);
-            }
-            catch
-            {
-                // ignored
-            }
+            controller.CopyPacUrl();
         }
 
         private void EditPACFileItem_Click(object sender, EventArgs e)
@@ -1192,19 +1186,16 @@ namespace Shadowsocks.View
 
         private void UpdatePACFromCNWhiteListItem_Click(object sender, EventArgs e)
         {
-            //controller.UpdatePACFromOnlinePac(@"https://raw.githubusercontent.com/HMBSbige/Text_Translation/master/ShadowsocksR/ss_white.pac");
             controller.UpdatePACFromChnDomainsAndIP(ChnDomainsAndIPUpdater.Templates.ss_white);
         }
 
         private void UpdatePACFromCNOnlyListItem_Click(object sender, EventArgs e)
         {
-            //controller.UpdatePACFromOnlinePac(@"https://raw.githubusercontent.com/HMBSbige/Text_Translation/master/ShadowsocksR/ss_white_r.pac");
             controller.UpdatePACFromChnDomainsAndIP(ChnDomainsAndIPUpdater.Templates.ss_white_r);
         }
 
         private void UpdatePACFromCNIPListItem_Click(object sender, EventArgs e)
         {
-            //controller.UpdatePACFromOnlinePac(@"https://raw.githubusercontent.com/HMBSbige/Text_Translation/master/ShadowsocksR/ss_cnip.pac");
             controller.UpdatePACFromChnDomainsAndIP(ChnDomainsAndIPUpdater.Templates.ss_cnip);
         }
 
@@ -1447,63 +1438,58 @@ namespace Shadowsocks.View
             foreach (var screen in Screen.AllScreens)
             {
                 var screen_size = Utils.GetScreenPhysicalSize();
-                using (var fullImage = new Bitmap(screen_size.X, screen_size.Y))
+                using var fullImage = new Bitmap(screen_size.X, screen_size.Y);
+                using (var g = Graphics.FromImage(fullImage))
                 {
-                    using (var g = Graphics.FromImage(fullImage))
-                    {
-                        g.CopyFromScreen(screen.Bounds.X,
-                                         screen.Bounds.Y,
-                                         0, 0,
-                                         fullImage.Size,
-                                         CopyPixelOperation.SourceCopy);
-                    }
-                    var decode_fail = false;
-                    for (var i = 0; i < 100; i++)
-                    {
-                        var cropRect = GetScanRect(fullImage.Width, fullImage.Height, i, out var stretch);
-                        if (cropRect.Width == 0)
-                            break;
+                    g.CopyFromScreen(screen.Bounds.X,
+                            screen.Bounds.Y,
+                            0, 0,
+                            fullImage.Size,
+                            CopyPixelOperation.SourceCopy);
+                }
+                var decode_fail = false;
+                for (var i = 0; i < 100; i++)
+                {
+                    var cropRect = GetScanRect(fullImage.Width, fullImage.Height, i, out var stretch);
+                    if (cropRect.Width == 0)
+                        break;
 
-                        string url;
-                        Rectangle rect;
-                        if (Math.Abs(stretch - 1.0) < 1e6 ? ScanQRCode(fullImage, cropRect, out url, out rect) : ScanQRCodeStretch(fullImage, cropRect, stretch, out url, out rect))
+                    string url;
+                    Rectangle rect;
+                    if (Math.Abs(stretch - 1.0) < 1e6 ? ScanQRCode(fullImage, cropRect, out url, out rect) : ScanQRCodeStretch(fullImage, cropRect, stretch, out url, out rect))
+                    {
+                        var success = controller.AddServerBySSURL(url);
+                        var splash = new QRCodeSplashForm();
+                        if (success)
                         {
-                            var success = controller.AddServerBySSURL(url);
-                            var splash = new QRCodeSplashForm();
-                            if (success)
-                            {
-                                splash.FormClosed += splash_FormClosed;
-                            }
-                            else if (!ss_only)
-                            {
-                                _urlToOpen = url;
-                                //if (url.StartsWith("http://") || url.StartsWith("https://"))
-                                //    splash.FormClosed += openURLFromQRCode;
-                                //else
-                                splash.FormClosed += showURLFromQRCode;
-                            }
-                            else
-                            {
-                                decode_fail = true;
-                                continue;
-                            }
-                            splash.Location = new Point(screen.Bounds.X, screen.Bounds.Y);
-                            var dpi = Screen.PrimaryScreen.Bounds.Width / (double)screen_size.X;
-                            splash.TargetRect = new Rectangle(
+                            splash.FormClosed += splash_FormClosed;
+                        }
+                        else if (!ss_only)
+                        {
+                            _urlToOpen = url;
+                            splash.FormClosed += showURLFromQRCode;
+                        }
+                        else
+                        {
+                            decode_fail = true;
+                            continue;
+                        }
+                        splash.Location = new Point(screen.Bounds.X, screen.Bounds.Y);
+                        var dpi = Screen.PrimaryScreen.Bounds.Width / (double)screen_size.X;
+                        splash.TargetRect = new Rectangle(
                                 (int)(rect.Left * dpi + screen.Bounds.X),
                                 (int)(rect.Top * dpi + screen.Bounds.Y),
                                 (int)(rect.Width * dpi),
                                 (int)(rect.Height * dpi));
-                            splash.Size = new Size(fullImage.Width, fullImage.Height);
-                            splash.Show();
-                            return;
-                        }
-                    }
-                    if (decode_fail)
-                    {
-                        MessageBox.Show(I18N.GetString("Failed to decode QRCode"));
+                        splash.Size = new Size(fullImage.Width, fullImage.Height);
+                        splash.Show();
                         return;
                     }
+                }
+                if (decode_fail)
+                {
+                    MessageBox.Show(I18N.GetString("Failed to decode QRCode"));
+                    return;
                 }
             }
             MessageBox.Show(I18N.GetString("No QRCode found. Try to zoom in or move it to the center of the screen."));
@@ -1514,25 +1500,25 @@ namespace Shadowsocks.View
             ScanScreenQRCode(false);
         }
 
-        void splash_FormClosed(object sender, FormClosedEventArgs e)
+        private void splash_FormClosed(object sender, FormClosedEventArgs e)
         {
             ShowConfigForm(true);
         }
 
-        void showURLFromQRCode()
+        private void showURLFromQRCode()
         {
-            var dlg = new ShowTextForm("QRCode", _urlToOpen);
+            var dlg = new ShowTextWindow(_urlToOpen);
             dlg.Show();
             dlg.Activate();
             dlg.BringToFront();
         }
 
-        void showURLFromQRCode(object sender, FormClosedEventArgs e)
+        private void showURLFromQRCode(object sender, FormClosedEventArgs e)
         {
             showURLFromQRCode();
         }
 
-        void showURLFromQRCode(object sender, EventArgs e)
+        private void showURLFromQRCode(object sender, EventArgs e)
         {
             showURLFromQRCode();
         }
