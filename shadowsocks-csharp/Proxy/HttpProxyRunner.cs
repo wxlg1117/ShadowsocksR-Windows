@@ -9,11 +9,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Windows.Forms;
 
 namespace Shadowsocks.Proxy
 {
-    class HttpProxyRunner
+    public class HttpProxyRunner
     {
         private static readonly string UNIQUE_CONFIG_FILE;
         private static readonly Job PRIVOXY_JOB;
@@ -127,7 +126,7 @@ namespace Shadowsocks.Proxy
             }
         }
 
-        private static int GetFreePort()
+        public static int GetFreePort()
         {
             const int defaultPort = 60000;
             try

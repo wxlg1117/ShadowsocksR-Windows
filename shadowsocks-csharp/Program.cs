@@ -1,14 +1,14 @@
-﻿using Microsoft.Win32;
-using Shadowsocks.Controller;
-using Shadowsocks.Model;
-using Shadowsocks.Util;
-using Shadowsocks.View;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Windows;
+using Microsoft.Win32;
+using Shadowsocks.Controller;
+using Shadowsocks.Model;
+using Shadowsocks.Util;
+using Shadowsocks.View;
 
 namespace Shadowsocks
 {
@@ -20,7 +20,7 @@ namespace Shadowsocks
         [STAThread]
         private static void Main(string[] args)
         {
-            Directory.SetCurrentDirectory(Path.GetDirectoryName(Utils.GetExecutablePath()));
+            Directory.SetCurrentDirectory(Path.GetDirectoryName(Utils.GetExecutablePath()) ?? throw new InvalidOperationException());
             if (args.Any(arg => arg == @"--setautorun"))
             {
                 if (!AutoStartup.Switch())
@@ -45,8 +45,6 @@ namespace Shadowsocks
             };
 
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            System.Windows.Forms.Application.EnableVisualStyles();
-            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
             SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
             app.Exit += App_Exit;

@@ -7,7 +7,6 @@ using Shadowsocks.Model;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -19,7 +18,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using Point = System.Drawing.Point;
+using System.Windows.Media;
 
 namespace Shadowsocks.Util
 {
@@ -29,7 +28,14 @@ namespace Shadowsocks.Util
 
         public static LRUCache<string, IPAddress> LocalDnsBuffer => DnsBuffer;
 
-        private static Process current_process => Process.GetCurrentProcess();
+        #region ReleaseMemory
+
+        private static Process CurrentProcess => Process.GetCurrentProcess();
+
+        [DllImport(@"kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetProcessWorkingSetSize(IntPtr process, UIntPtr minimumWorkingSetSize,
+                UIntPtr maximumWorkingSetSize);
 
         public static void ReleaseMemory(bool removePages = true)
         {
@@ -63,14 +69,17 @@ namespace Shadowsocks.Util
                 // just kidding
                 if (!Environment.Is64BitProcess)
                 {
-                    SetProcessWorkingSetSize(current_process.Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
+                    SetProcessWorkingSetSize(CurrentProcess.Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
                 }
                 else
                 {
-                    SetProcessWorkingSetSize(current_process.Handle, (UIntPtr)0xFFFFFFFFFFFFFFFF, (UIntPtr)0xFFFFFFFFFFFFFFFF);
+                    SetProcessWorkingSetSize(CurrentProcess.Handle, (UIntPtr)0xFFFFFFFFFFFFFFFF,
+                            (UIntPtr)0xFFFFFFFFFFFFFFFF);
                 }
             }
         }
+
+        #endregion
 
         public static string UnGzip(byte[] buf)
         {
@@ -84,22 +93,31 @@ namespace Shadowsocks.Util
                     sb.Write(buffer, 0, n);
                 }
             }
+
             return Encoding.UTF8.GetString(sb.ToArray());
         }
 
-        public static void RandBytes(byte[] buf, int length)
+        public static void RandBytes(byte[] buf, int length = -1)
         {
+            if (length == -1)
+            {
+                length = buf.Length;
+            }
             var temp = new byte[length];
-            var rngServiceProvider = new RNGCryptoServiceProvider();
-            rngServiceProvider.GetBytes(temp);
+            using (var rngServiceProvider = new RNGCryptoServiceProvider())
+            {
+                rngServiceProvider.GetBytes(temp);
+            }
             temp.CopyTo(buf, 0);
         }
 
         public static uint RandUInt32()
         {
             var temp = new byte[4];
-            var rngServiceProvider = new RNGCryptoServiceProvider();
-            rngServiceProvider.GetBytes(temp);
+            using (var rngServiceProvider = new RNGCryptoServiceProvider())
+            {
+                rngServiceProvider.GetBytes(temp);
+            }
             return BitConverter.ToUInt32(temp, 0);
         }
 
@@ -123,6 +141,7 @@ namespace Shadowsocks.Util
                 if (target[target_offset + i] != m[m_offset + i])
                     return false;
             }
+
             return true;
         }
 
@@ -140,6 +159,7 @@ namespace Shadowsocks.Util
                             if (target[i + j] != m[j])
                                 break;
                         }
+
                         if (j >= m.Length)
                         {
                             return i;
@@ -147,6 +167,7 @@ namespace Shadowsocks.Util
                     }
                 }
             }
+
             return -1;
         }
 
@@ -160,6 +181,7 @@ namespace Shadowsocks.Util
                 if (addr[index] != net_addr[index])
                     return false;
             }
+
             if ((addr[index] >> (i - netmask)) != (net_addr[index] >> (i - netmask)))
                 return false;
             return true;
@@ -180,10 +202,8 @@ namespace Shadowsocks.Util
                     return false;
                 }
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
 
         public static bool isLocal(IPAddress ip)
@@ -193,29 +213,33 @@ namespace Shadowsocks.Util
             {
                 var netmasks = new[]
                 {
-                    "127.0.0.0/8",
-                    "169.254.0.0/16",
+                        "127.0.0.0/8",
+                        "169.254.0.0/16"
                 };
                 foreach (var netmask in netmasks)
                 {
                     if (isMatchSubNet(ip, netmask))
                         return true;
                 }
+
                 return false;
             }
-            else if (addr.Length == 16)
+
+            if (addr.Length == 16)
             {
                 var netmasks = new[]
                 {
-                    "::1/128",
+                        "::1/128"
                 };
                 foreach (var netmask in netmasks)
                 {
                     if (isMatchSubNet(ip, netmask))
                         return true;
                 }
+
                 return false;
             }
+
             return true;
         }
 
@@ -233,41 +257,45 @@ namespace Shadowsocks.Util
                     return false;
                 var netmasks = new[]
                 {
-                    "0.0.0.0/8",
-                    "10.0.0.0/8",
-                    //"100.64.0.0/10", //部分地区运营商貌似在使用这个，这个可能不安全
-                    "127.0.0.0/8",
-                    "169.254.0.0/16",
-                    "172.16.0.0/12",
-                    //"192.0.0.0/24",
-                    //"192.0.2.0/24",
-                    "192.168.0.0/16",
-                    //"198.18.0.0/15",
-                    //"198.51.100.0/24",
-                    //"203.0.113.0/24",
+                        "0.0.0.0/8",
+                        "10.0.0.0/8",
+                        //"100.64.0.0/10", //部分地区运营商貌似在使用这个，这个可能不安全
+                        "127.0.0.0/8",
+                        "169.254.0.0/16",
+                        "172.16.0.0/12",
+                        //"192.0.0.0/24",
+                        //"192.0.2.0/24",
+                        "192.168.0.0/16"
+                        //"198.18.0.0/15",
+                        //"198.51.100.0/24",
+                        //"203.0.113.0/24",
                 };
                 foreach (var netmask in netmasks)
                 {
                     if (isMatchSubNet(ip, netmask))
                         return true;
                 }
+
                 return false;
             }
-            else if (addr.Length == 16)
+
+            if (addr.Length == 16)
             {
                 var netmasks = new[]
                 {
-                    "::1/128",
-                    "fc00::/7",
-                    "fe80::/10",
+                        "::1/128",
+                        "fc00::/7",
+                        "fe80::/10"
                 };
                 foreach (var netmask in netmasks)
                 {
                     if (isMatchSubNet(ip, netmask))
                         return true;
                 }
+
                 return false;
             }
+
             return true;
         }
 
@@ -308,6 +336,7 @@ namespace Shadowsocks.Util
                     ret += str[i];
                 }
             }
+
             return ret;
         }
 
@@ -338,6 +367,7 @@ namespace Shadowsocks.Util
             {
                 Logging.Info($@"DNS query {host} answer {ret_ipAddress}");
             }
+
             return ret_ipAddress;
         }
 
@@ -351,10 +381,21 @@ namespace Shadowsocks.Util
                     {
                         UseCache = false
                     };
+                    IPAddress r;
                     if (IPv6_first)
                     {
-                        var r = client.Query(host, QueryType.AAAA).Answers.OfType<AaaaRecord>().FirstOrDefault()
-                                ?.Address;
+                        try
+                        {
+                            r = client.Query(host, QueryType.AAAA).Answers.OfType<AaaaRecord>().FirstOrDefault()
+                                    ?.Address;
+                        }
+                        catch (DnsResponseException)
+                        {
+                            client.UseTcpOnly = true;
+                            r = client.Query(host, QueryType.AAAA).Answers.OfType<AaaaRecord>().FirstOrDefault()
+                                    ?.Address;
+                        }
+
                         if (r != null)
                         {
                             return r;
@@ -368,7 +409,16 @@ namespace Shadowsocks.Util
                     }
                     else
                     {
-                        var r = client.Query(host, QueryType.A).Answers.OfType<ARecord>().FirstOrDefault()?.Address;
+                        try
+                        {
+                            r = client.Query(host, QueryType.A).Answers.OfType<ARecord>().FirstOrDefault()?.Address;
+                        }
+                        catch (DnsResponseException)
+                        {
+                            client.UseTcpOnly = true;
+                            r = client.Query(host, QueryType.A).Answers.OfType<ARecord>().FirstOrDefault()?.Address;
+                        }
+
                         if (r != null)
                         {
                             return r;
@@ -483,8 +533,9 @@ namespace Shadowsocks.Util
                 var res = p.MainModule.FileName;
                 return res;
             }
+
             var dllPath = GetDllPath();
-            return Path.Combine(Path.GetDirectoryName(dllPath), $@"{Path.GetFileNameWithoutExtension(dllPath)}.exe");
+            return Path.Combine(Path.GetDirectoryName(dllPath) ?? throw new InvalidOperationException(), $@"{Path.GetFileNameWithoutExtension(dllPath)}.exe");
         }
 
         public static string GetDllPath()
@@ -525,20 +576,12 @@ namespace Shadowsocks.Util
                 process.Close();
                 return ret;
             }
+
             return -1;
         }
 
-        public static int GetDpiMul()
-        {
-            int dpi;
-            using (var graphics = Graphics.FromHwnd(IntPtr.Zero))
-            {
-                dpi = (int)graphics.DpiX;
-            }
-            return (dpi * 4 + 48) / 96;
-        }
-
         private static string _tempPath;
+
         // return path to store temporary files
         public static string GetTempPath()
         {
@@ -546,7 +589,8 @@ namespace Shadowsocks.Util
             {
                 try
                 {
-                    _tempPath = Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), @"temp")).FullName;
+                    _tempPath = Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), @"temp"))
+                            .FullName;
                 }
                 catch (Exception e)
                 {
@@ -573,6 +617,7 @@ namespace Shadowsocks.Util
                     return true;
                 }
             }
+
             return false;
         }
 
@@ -678,27 +723,67 @@ namespace Shadowsocks.Util
             }
         }
 
-        public enum DeviceCap
+        public static IEnumerable<T> FindVisualChildren<T>(DependencyObject depObj) where T : DependencyObject
         {
-            DESKTOPVERTRES = 117,
-            DESKTOPHORZRES = 118,
+            if (depObj != null)
+            {
+                for (var i = 0; i < VisualTreeHelper.GetChildrenCount(depObj); i++)
+                {
+                    var child = VisualTreeHelper.GetChild(depObj, i);
+                    if (child is T dependencyObject)
+                    {
+                        yield return dependencyObject;
+                    }
+
+                    foreach (var childOfChild in FindVisualChildren<T>(child))
+                    {
+                        yield return childOfChild;
+                    }
+                }
+            }
         }
 
-        public static Point GetScreenPhysicalSize()
+        public static string FormatBytes(long bytes)
         {
-            using var g = Graphics.FromHwnd(IntPtr.Zero);
-            var desktop = g.GetHdc();
-            var PhysicalScreenWidth = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPHORZRES);
-            var PhysicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPVERTRES);
+            const long K = 1024L;
+            const long M = K * 1024L;
+            const long G = M * 1024L;
+            const long T = G * 1024L;
+            const long P = T * 1024L;
+            const long E = P * 1024L;
 
-            return new Point(PhysicalScreenWidth, PhysicalScreenHeight);
+            if (bytes >= M * 990)
+            {
+                if (bytes >= G * 990)
+                {
+                    if (bytes >= P * 990)
+                        return $@"{bytes / (double)E:F3}EB";
+                    if (bytes >= T * 990)
+                        return $@"{bytes / (double)P:F3}PB";
+                    return $@"{bytes / (double)T:F3}TB";
+                }
+
+                if (bytes >= G * 99)
+                    return $@"{bytes / (double)G:F2}GB";
+                if (bytes >= G * 9)
+                    return $@"{bytes / (double)G:F3}GB";
+                return $@"{bytes / (double)G:F4}GB";
+            }
+
+            if (bytes >= K * 990)
+            {
+                if (bytes >= M * 100)
+                    return $@"{bytes / (double)M:F1}MB";
+                if (bytes > M * 9.9)
+                    return $@"{bytes / (double)M:F2}MB";
+                return $@"{bytes / (double)M:F3}MB";
+            }
+
+            if (bytes > K * 99)
+                return $@"{bytes / (double)K:F0}KB";
+            if (bytes > 900)
+                return $@"{bytes / (double)K:F1}KB";
+            return bytes == 0 ? $@"{bytes}Byte" : $@"{bytes}Bytes";
         }
-
-        [DllImport("gdi32.dll")]
-        static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
-
-        [DllImport("kernel32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetProcessWorkingSetSize(IntPtr process, UIntPtr minimumWorkingSetSize, UIntPtr maximumWorkingSetSize);
     }
 }

@@ -1,9 +1,9 @@
-﻿using Newtonsoft.Json;
-using Shadowsocks.Model;
-using System;
+﻿using System;
 using System.Dynamic;
 using System.Net;
 using System.Text;
+using Newtonsoft.Json;
+using Shadowsocks.Model;
 
 namespace Shadowsocks.Controller
 {
@@ -21,7 +21,7 @@ namespace Shadowsocks.Controller
 
         public const string Name = @"ShadowsocksR";
         public const string Copyright = @"Copyright © HMBSbige 2019 & BreakWa11 2017. Fork from Shadowsocks by clowwindy";
-        public const string Version = @"5.0.0.0";
+        public const string Version = @"5.0.0.1";
 
         public const string FullVersion = Version +
 #if IsDotNetCore

@@ -16,9 +16,9 @@ using ZXing;
 using ZXing.Common;
 using ZXing.QrCode;
 using BitmapLuminanceSource = ZXing.Windows.Compatibility.BitmapLuminanceSource;
-using Clipboard = System.Windows.Forms.Clipboard;
-using DataFormats = System.Windows.Forms.DataFormats;
-using MessageBox = System.Windows.Forms.MessageBox;
+using Clipboard = System.Windows.Clipboard;
+using DataFormats = System.Windows.DataFormats;
+using MessageBox = System.Windows.MessageBox;
 
 namespace Shadowsocks.View
 {
@@ -64,12 +64,19 @@ namespace Shadowsocks.View
         private MenuItem SelectRandomItem;
         private MenuItem sameHostForSameTargetItem;
         private MenuItem UpdateItem;
-        private ConfigForm configForm;
-        private SettingsForm settingsForm;
-        private ServerLogForm serverLogForm;
-        private PortSettingsForm portMapForm;
-        private SubscribeForm subScribeForm;
-        private LogWindow logWindow;
+        private ConfigWindow _configWindow;
+        private SettingsWindow _settingsWindow;
+
+        #region ServerLogWindow
+
+        private ServerLogWindow _serverLogWindow;
+        private WindowStatus _serverLogWindowStatus;
+
+        #endregion
+
+        private PortSettingsWindow _portMapWindow;
+        private SubscribeWindow _subScribeWindow;
+        private LogWindow _logWindow;
         private string _urlToOpen;
         private System.Timers.Timer timerDelayCheckUpdate;
 
@@ -149,98 +156,70 @@ namespace Shadowsocks.View
 
         private void UpdateTrayIcon()
         {
-            int dpi;
-            using (var graphics = Graphics.FromHwnd(IntPtr.Zero))
-            {
-                dpi = (int)graphics.DpiX;
-            }
             var config = controller.GetCurrentConfiguration();
             var enabled = config.sysProxyMode != (int)ProxyMode.NoModify && config.sysProxyMode != (int)ProxyMode.Direct;
             var global = config.sysProxyMode == (int)ProxyMode.Global;
             var random = config.random;
 
-            try
+            var icon = Resources.ss24;
+            double mul_a = 1.0, mul_r = 1.0, mul_g = 1.0, mul_b = 1.0;
+            if (!enabled)
             {
-                var icon = new Bitmap("icon.png");
-                var newIcon = Icon.FromHandle(icon.GetHicon());
-                icon.Dispose();
-                _notifyIcon.Icon = newIcon;
+                mul_g = 0.4;
             }
-            catch
+            else if (!global)
             {
-                Bitmap icon;
-                if (dpi < 97)
-                {
-                    // dpi = 96;
-                    icon = Resources.ss16;
-                }
-                else if (dpi < 121)
-                {
-                    // dpi = 120;
-                    icon = Resources.ss20;
-                }
-                else
-                {
-                    icon = Resources.ss24;
-                }
-                double mul_a = 1.0, mul_r = 1.0, mul_g = 1.0, mul_b = 1.0;
-                if (!enabled)
-                {
-                    mul_g = 0.4;
-                }
-                else if (!global)
-                {
-                    mul_b = 0.4;
-                    mul_g = 0.8;
-                }
-                if (!random)
-                {
-                    mul_r = 0.4;
-                }
+                mul_b = 0.4;
+                mul_g = 0.8;
+            }
 
-                var iconCopy = new Bitmap(icon);
-                for (var x = 0; x < iconCopy.Width; ++x)
-                {
-                    for (var y = 0; y < iconCopy.Height; ++y)
-                    {
-                        var color = icon.GetPixel(x, y);
-                        iconCopy.SetPixel(x, y,
+            if (!random)
+            {
+                mul_r = 0.4;
+            }
 
+            var iconCopy = new Bitmap(icon);
+            for (var x = 0; x < iconCopy.Width; ++x)
+            {
+                for (var y = 0; y < iconCopy.Height; ++y)
+                {
+                    var color = icon.GetPixel(x, y);
+                    iconCopy.SetPixel(x, y,
                             Color.FromArgb((byte)(color.A * mul_a),
-                            ((byte)(color.R * mul_r)),
-                            ((byte)(color.G * mul_g)),
-                            ((byte)(color.B * mul_b))));
-                    }
+                                    (byte)(color.R * mul_r),
+                                    (byte)(color.G * mul_g),
+                                    (byte)(color.B * mul_b)));
                 }
-                var newIcon = Icon.FromHandle(iconCopy.GetHicon());
-                icon.Dispose();
-                iconCopy.Dispose();
-
-                _notifyIcon.Icon = newIcon;
             }
+
+            var newIcon = Icon.FromHandle(iconCopy.GetHicon());
+            icon.Dispose();
+            iconCopy.Dispose();
+
+            _notifyIcon.Icon = newIcon;
 
             string strServer = null;
             var line3 = string.Empty;
             var line4 = string.Empty;
             if (random)
             {
-                strServer = $@"{I18N.GetString("Load balance")}{I18N.GetString(": ")}{I18N.GetString(config.balanceAlgorithm)}";
+                strServer = $@"{I18N.GetString(@"Load balance")}{I18N.GetString(@": ")}{I18N.GetString(config.balanceAlgorithm)}";
                 if (config.randomInGroup)
                 {
-                    line3 = $@"{I18N.GetString("Balance in group")}{Environment.NewLine}";
+                    line3 = $@"{I18N.GetString(@"Balance in group")}{Environment.NewLine}";
                 }
 
                 if (config.autoBan)
                 {
-                    line4 = $@"{I18N.GetString("AutoBan")}{Environment.NewLine}";
+                    line4 = $@"{I18N.GetString(@"AutoBan")}{Environment.NewLine}";
                 }
             }
             else
             {
                 if (config.index >= 0 && config.index < config.configs.Count)
                 {
-                    var groupName = config.configs[config.index].group;
-                    var serverName = config.configs[config.index].remarks;
+                    var groupName = config.configs[config.index].Group;
+                    var serverName = config.configs[config.index].Remarks;
                     if (string.IsNullOrWhiteSpace(groupName))
                     {
                         strServer = string.IsNullOrWhiteSpace(serverName) ? null : serverName;
@@ -251,7 +230,7 @@ namespace Shadowsocks.View
                     }
                     else
                     {
-                        strServer = $@"{groupName}{I18N.GetString(": ")}{serverName}";
+                        strServer = $@"{groupName}{I18N.GetString(@": ")}{serverName}";
                     }
                 }
             }
@@ -259,11 +238,11 @@ namespace Shadowsocks.View
 
             // we want to show more details but notify icon title is limited to 127 characters
             var line1 = (enabled
-                                ? global ? I18N.GetString("Global") : I18N.GetString("PAC")
-                                : I18N.GetString("Disable system proxy"))
+                                ? global ? I18N.GetString(@"Global") : I18N.GetString(@"PAC")
+                                : I18N.GetString(@"Disable system proxy"))
                                 + Environment.NewLine;
             var line2 = string.IsNullOrWhiteSpace(strServer) ? null : $@"{strServer}{Environment.NewLine}";
-            var line5 = string.Format(I18N.GetString("Running: Port {0}"), config.localPort); // this feedback is very important because they need to know Shadowsocks is running
+            var line5 = string.Format(I18N.GetString(@"Running: Port {0}"), config.localPort); // this feedback is very important because they need to know Shadowsocks is running
 
             var text = $@"{line1}{line2}{line3}{line4}{line5}";
             var suffix = $@"...{Environment.NewLine}";
@@ -275,12 +254,12 @@ namespace Shadowsocks.View
             SetNotifyIconText(_notifyIcon, text);
         }
 
-        private MenuItem CreateMenuItem(string text, EventHandler click)
+        private static MenuItem CreateMenuItem(string text, EventHandler click)
         {
             return new MenuItem(I18N.GetString(text), click);
         }
 
-        private MenuItem CreateMenuGroup(string text, MenuItem[] items)
+        private static MenuItem CreateMenuGroup(string text, MenuItem[] items)
         {
             return new MenuItem(I18N.GetString(text), items);
         }
@@ -306,7 +285,7 @@ namespace Shadowsocks.View
                     new MenuItem("-"),
                     CreateMenuItem("Copy PAC URL", CopyPacUrlItem_Click),
                     CreateMenuItem("Edit local PAC file...", EditPACFileItem_Click),
-                    CreateMenuItem("Edit user rule for GFWList...", EditUserRuleFileForGFWListItem_Click),
+                    CreateMenuItem("Edit user rule for GFWList...", EditUserRuleFileForGFWListItem_Click)
                 }),
                 CreateMenuGroup("Proxy rule", new[] {
                     ruleBypassLan = CreateMenuItem("Bypass LAN", RuleBypassLanItem_Click),
@@ -314,7 +293,7 @@ namespace Shadowsocks.View
                     ruleBypassNotChina = CreateMenuItem("Bypass LAN && not China", RuleBypassNotChinaItem_Click),
                     ruleUser = CreateMenuItem("User custom", RuleUserItem_Click),
                     new MenuItem("-"),
-                    ruleDisableBypass = CreateMenuItem("Disable bypass", RuleBypassDisableItem_Click),
+                    ruleDisableBypass = CreateMenuItem("Disable bypass", RuleBypassDisableItem_Click)
                 }),
                 new MenuItem("-"),
                 ServersItem = CreateMenuGroup("Servers", new[] {
@@ -326,12 +305,12 @@ namespace Shadowsocks.View
                     sameHostForSameTargetItem = CreateMenuItem("Same host for same address", SelectSameHostForSameTargetItem_Click),
                     new MenuItem("-"),
                     CreateMenuItem("Server statistic...", ShowServerLogItem_Click),
-                    CreateMenuItem("Disconnect current", DisconnectCurrent_Click),
+                    CreateMenuItem("Disconnect current", DisconnectCurrent_Click)
                 }),
                 CreateMenuGroup("Servers Subscribe", new[] {
                     CreateMenuItem("Subscribe setting...", SubscribeSetting_Click),
                     CreateMenuItem("Update subscribe SSR node", CheckNodeUpdate_Click),
-                    CreateMenuItem("Update subscribe SSR node(bypass proxy)", CheckNodeUpdateBypassProxy_Click),
+                    CreateMenuItem("Update subscribe SSR node(bypass proxy)", CheckNodeUpdateBypassProxy_Click)
                 }),
                 CreateMenuItem("Global settings...", Setting_Click),
                 CreateMenuItem("Port settings...", ShowPortMapItem_Click),
@@ -417,6 +396,7 @@ namespace Shadowsocks.View
 
         private void updateFreeNodeChecker_NewFreeNodeFound(object sender, EventArgs e)
         {
+            //TODO
             if (configFrom_open)
             {
                 eventList.Add(new EventParams(sender, e));
@@ -483,9 +463,9 @@ namespace Shadowsocks.View
                         try // try get group name
                         {
                             var server = new Server(url, null);
-                            if (!string.IsNullOrEmpty(server.group))
+                            if (!string.IsNullOrEmpty(server.Group))
                             {
-                                curGroup = server.group;
+                                curGroup = server.Group;
                                 break;
                             }
                         }
@@ -514,7 +494,7 @@ namespace Shadowsocks.View
                     }
 
                     Debug.Assert(selected_server != null, nameof(selected_server) + " != null");
-                    if (keep_selected_server && selected_server.group == curGroup)
+                    if (keep_selected_server && selected_server.Group == curGroup)
                     {
                         var match = false;
                         foreach (var url in urls)
@@ -522,7 +502,7 @@ namespace Shadowsocks.View
                             try
                             {
                                 var server = new Server(url, null);
-                                if (selected_server.isMatchServer(server))
+                                if (selected_server.IsMatchServer(server))
                                 {
                                     match = true;
                                     break;
@@ -536,7 +516,7 @@ namespace Shadowsocks.View
                         if (!match)
                         {
                             urls.RemoveAt(0);
-                            urls.Add(selected_server.GetSSRLinkForServer());
+                            urls.Add(selected_server.SsrLink);
                         }
                     }
 
@@ -548,9 +528,9 @@ namespace Shadowsocks.View
                         {
                             for (var i = config.configs.Count - 1; i >= 0; --i)
                             {
-                                if (lastGroup == config.configs[i].group)
+                                if (lastGroup == config.configs[i].Group)
                                 {
-                                    old_servers[config.configs[i].id] = config.configs[i];
+                                    old_servers[config.configs[i].Id] = config.configs[i];
                                 }
                             }
                         }
@@ -564,19 +544,19 @@ namespace Shadowsocks.View
                                 {
                                     foreach (var pair in old_insert_servers)
                                     {
-                                        if (server.isMatchServer(pair.Value))
+                                        if (server.IsMatchServer(pair.Value))
                                         {
                                             match = true;
                                             break;
                                         }
                                     }
                                 }
-                                old_insert_servers[server.id] = server;
+                                old_insert_servers[server.Id] = server;
                                 if (!match)
                                 {
                                     foreach (var pair in old_servers)
                                     {
-                                        if (server.isMatchServer(pair.Value))
+                                        if (server.IsMatchServer(pair.Value))
                                         {
                                             match = true;
                                             old_servers.Remove(pair.Key);
@@ -591,7 +571,7 @@ namespace Shadowsocks.View
                                     var insert_index = config.configs.Count;
                                     for (var index = 0; index < config.configs.Count; ++index)
                                     {
-                                        if (config.configs[index].group == curGroup)
+                                        if (config.configs[index].Group == curGroup)
                                         {
                                             insert_index = index + 1;
                                             break;
@@ -610,7 +590,7 @@ namespace Shadowsocks.View
                         {
                             for (var i = 0; i < config.configs.Count; ++i)
                             {
-                                if (config.configs[i].id == pair.Key)
+                                if (config.configs[i].Id == pair.Key)
                                 {
                                     config.configs.RemoveAt(i);
                                     break;
@@ -625,15 +605,16 @@ namespace Shadowsocks.View
                         var match = false;
                         for (var i = 0; i < config.configs.Count; ++i)
                         {
-                            if (config.configs[i].id == selected_server.id)
+                            if (config.configs[i].Id == selected_server.Id)
                             {
                                 config.index = i;
                                 match = true;
                                 break;
                             }
-                            else if (config.configs[i].group == selected_server.group)
+
+                            if (config.configs[i].Group == selected_server.Group)
                             {
-                                if (config.configs[i].isMatchServer(selected_server))
+                                if (config.configs[i].IsMatchServer(selected_server))
                                 {
                                     config.index = i;
                                     match = true;
@@ -766,9 +747,9 @@ namespace Shadowsocks.View
             for (var i = 0; i < configuration.configs.Count; i++)
             {
                 var server = configuration.configs[i];
-                var group_name = string.IsNullOrEmpty(server.group) ? def_group : server.group;
+                var group_name = string.IsNullOrEmpty(server.Group) ? def_group : server.Group;
 
-                var item = new MenuItem(server.FriendlyName())
+                var item = new MenuItem(server.FriendlyName)
                 {
                     Tag = i
                 };
@@ -812,150 +793,34 @@ namespace Shadowsocks.View
 
         private void ShowConfigForm(bool addNode)
         {
-            if (configForm != null)
+            if (_configWindow != null)
             {
-                configForm.Activate();
+                _configWindow.Activate();
+                _configWindow.UpdateLayout();
+                if (_configWindow.WindowState == WindowState.Minimized)
+                {
+                    _configWindow.WindowState = WindowState.Normal;
+                }
                 if (addNode)
                 {
                     var cfg = controller.GetCurrentConfiguration();
-                    configForm.SetServerListSelectedIndex(cfg.index + 1);
+                    _configWindow.SetServerListSelectedIndex(cfg.index + 1);
                 }
             }
             else
             {
                 configFrom_open = true;
-                configForm = new ConfigForm(controller, updateChecker, addNode ? -1 : -2);
-                configForm.Show();
-                configForm.Activate();
-                configForm.BringToFront();
-                configForm.FormClosed += configForm_FormClosed;
+                _configWindow = new ConfigWindow(controller, addNode ? -1 : -2);
+                _configWindow.Show();
+                _configWindow.Activate();
+                _configWindow.BringToFront();
+                _configWindow.Closed += ConfigWindow_Closed;
             }
         }
 
-        private void ShowConfigForm(int index)
+        private void ConfigWindow_Closed(object sender, EventArgs e)
         {
-            if (configForm != null)
-            {
-                configForm.Activate();
-            }
-            else
-            {
-                configFrom_open = true;
-                configForm = new ConfigForm(controller, updateChecker, index);
-                configForm.Show();
-                configForm.Activate();
-                configForm.BringToFront();
-                configForm.FormClosed += configForm_FormClosed;
-            }
-        }
-
-        private void ShowSettingForm()
-        {
-            if (settingsForm != null)
-            {
-                settingsForm.Activate();
-            }
-            else
-            {
-                settingsForm = new SettingsForm(controller);
-                settingsForm.Show();
-                settingsForm.Activate();
-                settingsForm.BringToFront();
-                settingsForm.FormClosed += settingsForm_FormClosed;
-            }
-        }
-
-        private void ShowPortMapForm()
-        {
-            if (portMapForm != null)
-            {
-                portMapForm.Activate();
-                portMapForm.Update();
-                if (portMapForm.WindowState == FormWindowState.Minimized)
-                {
-                    portMapForm.WindowState = FormWindowState.Normal;
-                }
-            }
-            else
-            {
-                portMapForm = new PortSettingsForm(controller);
-                portMapForm.Show();
-                portMapForm.Activate();
-                portMapForm.BringToFront();
-                portMapForm.FormClosed += portMapForm_FormClosed;
-            }
-        }
-
-        private void ShowServerLogForm()
-        {
-            if (serverLogForm != null)
-            {
-                serverLogForm.Activate();
-                serverLogForm.Update();
-                if (serverLogForm.WindowState == FormWindowState.Minimized)
-                {
-                    serverLogForm.WindowState = FormWindowState.Normal;
-                }
-            }
-            else
-            {
-                serverLogForm = new ServerLogForm(controller);
-                serverLogForm.Show();
-                serverLogForm.Activate();
-                serverLogForm.BringToFront();
-                serverLogForm.FormClosed += serverLogForm_FormClosed;
-            }
-        }
-
-        private void ShowGlobalLogWindow()
-        {
-            if (logWindow != null)
-            {
-                logWindow.Activate();
-                logWindow.UpdateLayout();
-                if (logWindow.WindowState == WindowState.Minimized)
-                {
-                    logWindow.WindowState = WindowState.Normal;
-                }
-            }
-            else
-            {
-                logWindow = new LogWindow();
-                logWindow.Show();
-                logWindow.Activate();
-                logWindow.BringToFront();
-                logWindow.Closed += (sender, args) =>
-                {
-                    logWindow = null;
-                    Utils.ReleaseMemory();
-                };
-            }
-        }
-
-        private void ShowSubscribeSettingForm()
-        {
-            if (subScribeForm != null)
-            {
-                subScribeForm.Activate();
-                subScribeForm.Update();
-                if (subScribeForm.WindowState == FormWindowState.Minimized)
-                {
-                    subScribeForm.WindowState = FormWindowState.Normal;
-                }
-            }
-            else
-            {
-                subScribeForm = new SubscribeForm(controller);
-                subScribeForm.Show();
-                subScribeForm.Activate();
-                subScribeForm.BringToFront();
-                subScribeForm.FormClosed += subScribeForm_FormClosed;
-            }
-        }
-
-        private void configForm_FormClosed(object sender, FormClosedEventArgs e)
-        {
-            configForm = null;
+            _configWindow = null;
             configFrom_open = false;
             Utils.ReleaseMemory();
             if (eventList.Count > 0)
@@ -964,31 +829,153 @@ namespace Shadowsocks.View
                 {
                     updateFreeNodeChecker_NewFreeNodeFound(p.sender, p.e);
                 }
+
                 eventList.Clear();
             }
         }
 
-        private void settingsForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void ShowConfigForm(int index)
         {
-            settingsForm = null;
-            Utils.ReleaseMemory();
+            if (_configWindow != null)
+            {
+                _configWindow.Activate();
+                _configWindow.UpdateLayout();
+                if (_configWindow.WindowState == WindowState.Minimized)
+                {
+                    _configWindow.WindowState = WindowState.Normal;
+                }
+                _configWindow.SetServerListSelectedIndex(index);
+            }
+            else
+            {
+                configFrom_open = true;
+                _configWindow = new ConfigWindow(controller, index);
+                _configWindow.Show();
+                _configWindow.Activate();
+                _configWindow.BringToFront();
+                _configWindow.Closed += ConfigWindow_Closed;
+            }
         }
 
-        private void serverLogForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void ShowSettingForm()
         {
-            serverLogForm = null;
-            Utils.ReleaseMemory();
+            if (_settingsWindow != null)
+            {
+                _settingsWindow.Activate();
+            }
+            else
+            {
+                _settingsWindow = new SettingsWindow(controller);
+                _settingsWindow.Show();
+                _settingsWindow.Activate();
+                _settingsWindow.BringToFront();
+                _settingsWindow.Closed += (o, args) =>
+                {
+                    _settingsWindow = null;
+                    Utils.ReleaseMemory();
+                };
+            }
         }
 
-        private void portMapForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void ShowPortMapForm()
         {
-            portMapForm = null;
-            Utils.ReleaseMemory();
+            if (_portMapWindow != null)
+            {
+                _portMapWindow.Activate();
+                _portMapWindow.UpdateLayout();
+                if (_portMapWindow.WindowState == WindowState.Minimized)
+                {
+                    _portMapWindow.WindowState = WindowState.Normal;
+                }
+            }
+            else
+            {
+                _portMapWindow = new PortSettingsWindow(controller);
+                _portMapWindow.Show();
+                _portMapWindow.Activate();
+                _portMapWindow.BringToFront();
+                _portMapWindow.Closed += (o, e) =>
+                {
+                    _portMapWindow = null;
+                    Utils.ReleaseMemory();
+                };
+            }
         }
 
-        private void subScribeForm_FormClosed(object sender, FormClosedEventArgs e)
+        private void ShowServerLogForm()
         {
-            subScribeForm = null;
+            if (_serverLogWindow != null)
+            {
+                _serverLogWindow.Activate();
+                _serverLogWindow.UpdateLayout();
+                if (_serverLogWindow.WindowState == WindowState.Minimized)
+                {
+                    _serverLogWindow.WindowState = WindowState.Normal;
+                }
+            }
+            else
+            {
+                _serverLogWindow = new ServerLogWindow(controller, _serverLogWindowStatus);
+                _serverLogWindow.Show();
+                _serverLogWindow.Activate();
+                _serverLogWindow.BringToFront();
+                _serverLogWindow.Closed += (o, e) =>
+                {
+                    _serverLogWindowStatus = new WindowStatus(_serverLogWindow);
+                    _serverLogWindow = null;
+                    Utils.ReleaseMemory();
+                };
+            }
+        }
+
+        private void ShowGlobalLogWindow()
+        {
+            if (_logWindow != null)
+            {
+                _logWindow.Activate();
+                _logWindow.UpdateLayout();
+                if (_logWindow.WindowState == WindowState.Minimized)
+                {
+                    _logWindow.WindowState = WindowState.Normal;
+                }
+            }
+            else
+            {
+                _logWindow = new LogWindow();
+                _logWindow.Show();
+                _logWindow.Activate();
+                _logWindow.BringToFront();
+                _logWindow.Closed += (sender, args) =>
+                {
+                    _logWindow = null;
+                    Utils.ReleaseMemory();
+                };
+            }
+        }
+
+        private void ShowSubscribeSettingForm()
+        {
+            if (_subScribeWindow != null)
+            {
+                _subScribeWindow.Activate();
+                _subScribeWindow.UpdateLayout();
+                if (_subScribeWindow.WindowState == WindowState.Minimized)
+                {
+                    _subScribeWindow.WindowState = WindowState.Normal;
+                }
+            }
+            else
+            {
+                _subScribeWindow = new SubscribeWindow(controller);
+                _subScribeWindow.Show();
+                _subScribeWindow.Activate();
+                _subScribeWindow.BringToFront();
+                _subScribeWindow.Closed += (sender, args) =>
+                {
+                    _subScribeWindow = null;
+                    Utils.ReleaseMemory();
+                };
+            }
         }
 
         private void Config_Click(object sender, EventArgs e)
@@ -1033,15 +1020,15 @@ namespace Shadowsocks.View
         public void Quit_Click(object sender, EventArgs e)
         {
             controller.Stop();
-            if (configForm != null)
+            if (_configWindow != null)
             {
-                configForm.Close();
-                configForm = null;
+                _configWindow.Close();
+                _configWindow = null;
             }
-            if (serverLogForm != null)
+            if (_serverLogWindow != null)
             {
-                serverLogForm.Close();
-                serverLogForm = null;
+                _serverLogWindow.Close();
+                _serverLogWindow = null;
             }
             if (timerDelayCheckUpdate != null)
             {
@@ -1075,7 +1062,7 @@ namespace Shadowsocks.View
             Utils.OpenURL("https://github.com/HMBSbige/ShadowsocksR-Windows");
         }
 
-        [DllImport("user32.dll")]
+        [DllImport(@"user32.dll")]
         private static extern short GetAsyncKeyState(Keys vKey);
 
         private void notifyIcon1_Click(object sender, MouseEventArgs e)
