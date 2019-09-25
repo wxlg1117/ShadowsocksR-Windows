@@ -1,6 +1,6 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Shadowsocks.Controller;
 using Shadowsocks.Encryption;
+using Shadowsocks.GitHubRelease;
 using Shadowsocks.Util;
 using System.Linq;
 using System.Security.Cryptography;
@@ -14,13 +14,16 @@ namespace UnitTest
         [TestMethod]
         public void TestCompareVersion()
         {
-            Assert.IsTrue(UpdateChecker.CompareVersion("2.3.1.0", "2.3.1") == 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("1.2", "1.3") < 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("1.3", "1.2") > 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("1.3", "1.3") == 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("1.2.1", "1.2") > 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("2.3.1", "2.4") < 0);
-            Assert.IsTrue(UpdateChecker.CompareVersion("1.3.2", "1.3.1") > 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"2.3.1.0", @"2.3.1") > 0); // wtf??? Be aware that
+            Assert.IsTrue(VersionUtil.CompareVersion(@"2.0.0.0", @"2.3.1") < 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.3.1.0", @"2.3.1") < 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"2.3.1.0", @"1.3.1") > 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.2", @"1.3") < 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.3", @"1.2") > 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.3", @"1.3") == 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.2.1", @"1.2") > 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"2.3.1", @"2.4") < 0);
+            Assert.IsTrue(VersionUtil.CompareVersion(@"1.3.2", @"1.3.1") > 0);
         }
 
         [TestMethod]
@@ -36,7 +39,7 @@ namespace UnitTest
         public void EncryptStringTest()
         {
             var largeBytes = new byte[ushort.MaxValue * 100];
-            Utils.RandBytes(largeBytes);
+            RNG.RandBytes(largeBytes);
             var largeStr = Encoding.UTF8.GetString(largeBytes);
             using var encryptor = EncryptorFactory.GetEncryptor(@"aes-256-cfb", @"密码");
 
@@ -46,5 +49,6 @@ namespace UnitTest
 
             Assert.AreEqual(largeStr, decodeStr);
         }
+
     }
 }

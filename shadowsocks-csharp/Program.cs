@@ -1,5 +1,6 @@
 ﻿using Microsoft.Win32;
 using Shadowsocks.Controller;
+using Shadowsocks.Controller.HttpRequest;
 using Shadowsocks.Model;
 using Shadowsocks.Util;
 using Shadowsocks.Util.SingleInstance;
@@ -9,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace Shadowsocks
@@ -22,7 +24,7 @@ namespace Shadowsocks
         private static void Main(string[] args)
         {
             Directory.SetCurrentDirectory(Path.GetDirectoryName(Utils.GetExecutablePath()) ?? throw new InvalidOperationException());
-            if (args.Contains(@"--setautorun"))
+            if (args.Contains(Constants.ParameterSetautorun))
             {
                 if (!AutoStartup.Switch())
                 {
@@ -35,11 +37,12 @@ namespace Shadowsocks
             using var singleInstance = new SingleInstance(identifier);
             if (!singleInstance.IsFirstInstance)
             {
-                singleInstance.PassArgumentsToFirstInstance(args.Append(@"--show"));
+                singleInstance.PassArgumentsToFirstInstance(args.Length == 0
+                        ? args.Append(Constants.ParameterMultiplyInstance)
+                        : args);
                 return;
             }
             singleInstance.ArgumentsReceived += SingleInstance_ArgumentsReceived;
-            singleInstance.ListenForArgumentsFromSuccessiveInstances();
 
             var app = new Application
             {
@@ -47,6 +50,9 @@ namespace Shadowsocks
             };
 
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            I18NUtil.SetLanguage(app.Resources, @"App");
+            ViewUtils.SetResource(app.Resources, @"../View/NotifyIconResources.xaml", 1);
 
             SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
             app.Exit += App_Exit;
@@ -81,11 +87,20 @@ namespace Shadowsocks
             SystemEvents.SessionEnding += _viewController.Quit_Click;
 
             _controller.Start();
+#if !DEBUG
+            Reg.SetUrlProtocol(@"ssr");
+            Reg.SetUrlProtocol(@"sub");
+#endif
+            singleInstance.ListenForArgumentsFromSuccessiveInstances();
             app.Run();
         }
 
         private static void App_Exit(object sender, ExitEventArgs e)
         {
+#if !DEBUG
+            Reg.RemoveUrlProtocol(@"ssr");
+            Reg.RemoveUrlProtocol(@"sub");
+#endif
             _controller?.Stop();
             _controller = null;
         }
@@ -95,43 +110,35 @@ namespace Shadowsocks
             switch (e.Mode)
             {
                 case PowerModes.Resume:
+                {
+                    Logging.Info("os wake up");
                     if (_controller != null)
                     {
-                        var timer = new System.Timers.Timer(5 * 1000);
-                        timer.Elapsed += Timer_Elapsed;
-                        timer.AutoReset = false;
-                        timer.Enabled = true;
-                        timer.Start();
+                        Task.Run(() =>
+                        {
+                            Thread.Sleep(10 * 1000);
+                            try
+                            {
+                                _controller.Start();
+                                Logging.Info("controller started");
+                            }
+                            catch (Exception ex)
+                            {
+                                Logging.LogUsefulException(ex);
+                            }
+                        });
                     }
                     break;
-                case PowerModes.Suspend:
-                    _controller?.Stop();
-                    break;
-            }
-        }
-
-        private static void Timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
-        {
-            try
-            {
-                _controller?.Start();
-            }
-            catch (Exception ex)
-            {
-                Logging.LogUsefulException(ex);
-            }
-            finally
-            {
-                try
-                {
-                    var timer = (System.Timers.Timer)sender;
-                    timer.Enabled = false;
-                    timer.Stop();
-                    timer.Dispose();
                 }
-                catch (Exception ex)
+                case PowerModes.Suspend:
                 {
-                    Logging.LogUsefulException(ex);
+                    if (_controller != null)
+                    {
+                        _controller.Stop();
+                        Logging.Info("controller stopped");
+                    }
+                    Logging.Info("os suspend");
+                    break;
                 }
             }
         }
@@ -143,7 +150,7 @@ namespace Shadowsocks
             {
                 Logging.Log(LogLevel.Error, $@"{e.ExceptionObject}");
                 MessageBox.Show(
-                $@"{I18N.GetString(@"Unexpected error, ShadowsocksR will exit.")}{Environment.NewLine}{e.ExceptionObject}",
+                $@"{I18NUtil.GetAppStringValue(@"UnexpectedError")}{Environment.NewLine}{e.ExceptionObject}",
                     UpdateChecker.Name, MessageBoxButton.OK, MessageBoxImage.Error);
                 Application.Current.Shutdown();
             }
@@ -151,12 +158,16 @@ namespace Shadowsocks
 
         private static void SingleInstance_ArgumentsReceived(object sender, ArgumentsReceivedEventArgs e)
         {
-            if (e.Args.Contains(@"--show"))
+            if (e.Args.Contains(Constants.ParameterMultiplyInstance))
             {
-                MessageBox.Show(I18N.GetString("Find Shadowsocks icon in your notify tray.") + Environment.NewLine +
-                                I18N.GetString("If you want to start multiple Shadowsocks, make a copy in another directory."),
-                        I18N.GetString("ShadowsocksR is already running."), MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(I18NUtil.GetAppStringValue(@"SuccessiveInstancesMessage1") + Environment.NewLine +
+                                I18NUtil.GetAppStringValue(@"SuccessiveInstancesMessage2"),
+                        I18NUtil.GetAppStringValue(@"SuccessiveInstancesCaption"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
+            Application.Current.Dispatcher?.Invoke(() =>
+            {
+                _viewController.ImportAddress(string.Join(Environment.NewLine, e.Args));
+            });
         }
     }
 }
